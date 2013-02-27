@@ -18,11 +18,17 @@
 #include <unistd.h>
 
 #include "util.h"
+#include "queue.h"
 
 #define MINARGS 3
 #define USAGE "<inputFilePath1> (other input filepaths) <outputFilePath>"
 #define SBUFSIZE 1025
 #define INPUTFS "%1024s"
+FILE* outputfp = NULL;
+#define NUM_THREADS 10
+#define QUEUE_SIZE 10
+queue q;
+bool doneWritingToQueue = false;
 
 /* Function for Each Thread to Run */
 void* Producer(void* fn)
@@ -56,16 +62,9 @@ void* Producer(void* fn)
 
 	/* Read File and Process*/
 	while(fscanf(inputfp, INPUTFS, hostname) > 0){
-	
-	    /* Lookup hostname and get IP string */
-	    if(dnslookup(hostname, firstipstr, sizeof(firstipstr))
-	       == UTIL_FAILURE){
-		fprintf(stderr, "dnslookup error: %s\n", hostname);
-		strncpy(firstipstr, "", sizeof(firstipstr));
-	    }
-
-	     /* Write to Output File */
-	    printf("Thread %s %s,%s\n", filename, hostname, firstipstr);
+		/*Lock queue*/
+		/*Add name to queue*/
+	    /*Unlock queue*/
 	}
     
 	/* Close Input File */
@@ -75,22 +74,37 @@ void* Producer(void* fn)
     return NULL;
 }
 
+void* Consumer(void* threadid){
+
+	/* Lookup hostname and get IP string */
+    if(dnslookup(hostname, firstipstr, sizeof(firstipstr))
+      				 == UTIL_FAILURE){
+		fprintf(stderr, "dnslookup error: %s\n", hostname);
+		strncpy(firstipstr, "", sizeof(firstipstr));
+    }
+
+    /* Write to Output File */
+	fprintf(outputfp, "%s,%s\n", hostname, firstipstr);
+
+	return NULL;
+}
 
 
 int main(int argc, char* argv[]){
 
     /* Local Vars */
-    FILE* outputfp = NULL;
+    
     // char hostname[SBUFSIZE];
     // char errorstr[SBUFSIZE];
     // char firstipstr[INET6_ADDRSTRLEN];
     int i;
     int numinputfiles;
+    pthread_t consumer_threads[NUM_THREADS];
     
     /* Setup Local Vars */
     int rc;
     long t;
-    //long cpyt[NUM_THREADS];
+    long cpyt[NUM_THREADS];
     
     /* Check Arguments */
     if(argc < MINARGS){
@@ -106,6 +120,12 @@ int main(int argc, char* argv[]){
     input files */
     pthread_t producer_threads[numinputfiles];
 
+    /* Initialize Queue */
+    if(queue_init(&q, QUEUE_SIZE) == QUEUE_FAILURE){
+	fprintf(stderr,
+		"error: queue_init failed!\n");
+    }
+
     /* Open Output File */
     outputfp = fopen(argv[(argc-1)], "w");
     if(!outputfp){
@@ -113,7 +133,7 @@ int main(int argc, char* argv[]){
 	return EXIT_FAILURE;
     }
 
-    /* Loop Through Input Files */
+    /* Loop Through Input Files and Create Producer Threads */
     for(i=0; i<numinputfiles; i++){
 		printf("In main: creating thread %ld\n", t);
 		rc = pthread_create(&(producer_threads[i]), NULL, Producer, argv[i+1]);
@@ -123,21 +143,36 @@ int main(int argc, char* argv[]){
 		}
 	}	
 
-	/* Wait for All Theads to Finish */
+	/* Spawn NUM_THREADS Consumer threads */
+    for(t=0;t<NUM_THREADS;t++){
+		printf("In main: creating thread %ld\n", t);
+		cpyt[t] = t;
+		rc = pthread_create(&(consumer_threads[t]), NULL, Consumer, &(cpyt[t]));
+		if (rc){
+		    printf("ERROR; return code from pthread_create() is %d\n", rc);
+		    exit(EXIT_FAILURE);
+		}
+    }
+
+	/* Wait for All Producer Theads to Finish */
     for(t=0;t<numinputfiles;t++){
 		pthread_join(producer_threads[t],NULL);
     }
     printf("All of the threads were completed!\n");
 	
-	
-	//     /* Write to Output File */
-	//     fprintf(outputfp, "%s,%s\n", hostname, firstipstr);
-	// }
+    /*Set doneWritingToQueue to TRUE so consumer threads know
+    they can stop*/
+    doneWritingToQueue = true;
 
+    /* Wait for All Consumer Theads to Finish */
+    for(t=0;t<NUM_THREADS;t++){
+		pthread_join(consumer_threads[t],NULL);
+    }
+    printf("All of the threads were completed!\n");
 	
 
     /* Close Output File */
-    //fclose(outputfp);
+    fclose(outputfp);
 
     return EXIT_SUCCESS;
 }
