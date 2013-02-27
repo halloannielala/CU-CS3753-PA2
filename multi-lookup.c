@@ -114,15 +114,20 @@ int main(int argc, char* argv[]){
     }
 
     /* Loop Through Input Files */
-    for(i=1; i<(argc-1); i++){
+    for(i=0; i<numinputfiles; i++){
 		printf("In main: creating thread %ld\n", t);
-		rc = pthread_create(&(producer_threads[i]), NULL, Producer, &(argv[i]));
+		rc = pthread_create(&(producer_threads[i]), NULL, Producer, argv[i+1]);
 		if (rc){
 		    printf("ERROR; return code from pthread_create() is %d\n", rc);
 		    exit(EXIT_FAILURE);
 		}
 	}	
 
+	/* Wait for All Theads to Finish */
+    for(t=0;t<numinputfiles;t++){
+		pthread_join(producer_threads[t],NULL);
+    }
+    printf("All of the threads were completed!\n");
 	
 	
 	//     /* Write to Output File */
