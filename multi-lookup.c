@@ -76,6 +76,10 @@ void* Producer(void* fn)
 
 void* Consumer(void* threadid){
 
+	/*Lock on queue
+	/*Get a name*/
+	/*Unlock queue*/
+
 	/* Lookup hostname and get IP string */
     if(dnslookup(hostname, firstipstr, sizeof(firstipstr))
       				 == UTIL_FAILURE){
@@ -83,9 +87,10 @@ void* Consumer(void* threadid){
 		strncpy(firstipstr, "", sizeof(firstipstr));
     }
 
+    /*Lock file*/
     /* Write to Output File */
 	fprintf(outputfp, "%s,%s\n", hostname, firstipstr);
-
+	/*Unlock file*/
 	return NULL;
 }
 
