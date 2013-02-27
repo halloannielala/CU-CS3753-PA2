@@ -16,6 +16,7 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include <semaphore.h>
 
 #include "util.h"
 #include "queue.h"
@@ -24,14 +25,16 @@
 #define USAGE "<inputFilePath1> (other input filepaths) <outputFilePath>"
 #define SBUFSIZE 1025
 #define INPUTFS "%1024s"
-FILE* outputfp = NULL;
 #define NUM_THREADS 10
 #define QUEUE_SIZE 10
+
+FILE* outputfp = NULL;
 queue q;
-bool doneWritingToQueue = false;
+int doneWritingToQueue = 0;
 sem_t sem_full;
 sem_t sem_empty;
 sem_t sem_m;
+sem_t sem_results;
 
 /* Function for Each Thread to Run */
 void* Producer(void* fn)
@@ -42,19 +45,19 @@ void* Producer(void* fn)
     long numprint = 3;
     char hostname[SBUFSIZE];
     char errorstr[SBUFSIZE];
-    char firstipstr[INET6_ADDRSTRLEN];
     FILE* inputfp = NULL;
+    int valp;
 
     /* Print hello numprint times */
-    for(t=0; t<numprint; t++)
-	{
-	    printf("Hello World! It's me, thread %s! "
-		   "This is printout %ld of %ld\n",
-		   filename, (t+1), numprint);
+ //    for(t=0; t<numprint; t++)
+	// {
+	//     printf("Hello World! It's me, thread %s! "
+	// 	   "This is printout %ld of %ld\n",
+	// 	   filename, (t+1), numprint);
 
-	    /* Sleep for 1 to 2 Seconds */
-	    usleep((rand()%100)*10000+1000000);
-	}
+	//     /* Sleep for 1 to 2 Seconds */
+	//     usleep((rand()%100)*10000+1000000);
+	// }
 
 	/* Open Input File */
 	inputfp = fopen(filename, "r");
@@ -63,21 +66,29 @@ void* Producer(void* fn)
 	    perror(errorstr);
 	}
 
+    sem_getvalue(&sem_empty, &valp);
+    printf("VALUE of EMPTY Semaphore before while loop %d\n", valp);
+
 	/* Read File and Process*/
 	while(fscanf(inputfp, INPUTFS, hostname) > 0){
-        printf("%s\n", hostname);
-		/*Decrement semaphore and lock queue*/
-        sem_wait(&sem_full);
+		/*Decrement full semaphore and acquire queue lock*/
+        sem_getvalue(&sem_empty, &valp);
+        printf("VALUE of EMPTY Semaphore beginning of while loop %d\n",valp);
+        sem_wait(&sem_empty);
         sem_wait(&sem_m);
+        sem_getvalue(&sem_empty, &valp);
+        printf("VALUE of EMPTY Semaphore after entering lock %d\n",valp);
 		/*Add name to queue*/
-        if(queue_push(&q, payload_in[i]) == QUEUE_FAILURE){
+        if(queue_push(&q, hostname) == QUEUE_FAILURE){
             fprintf(stderr,
                 "error: queue_push failed!\n"
                 "Thread %s, Name: %s\n",
                 filename, hostname);
+        }
+        printf("Thread: %s pushed %s to queue\n", filename, hostname);
 	    /*Unlock queue*/
         sem_post(&sem_m);
-        sem_post(&sem_empty);
+        sem_post(&sem_full);
 	}
     
 	/* Close Input File */
@@ -88,10 +99,26 @@ void* Producer(void* fn)
 }
 
 void* Consumer(void* threadid){
+    //char hostname[SBUFSIZE];
+    char* hostname;
+    //char errorstr[SBUFSIZE];
+    char firstipstr[INET6_ADDRSTRLEN];
 
-	/*Lock on queue
+	/*Decrement empty semaphore and acquire queue lock*/
+    sem_wait(&sem_full);
+    sem_wait(&sem_m);
+
 	/*Get a name*/
+    if((hostname = queue_pop(&q)) == NULL){
+        fprintf(stderr,
+            "error: queue_pop failed!\n"
+            "Threadid: %p\n",
+            threadid);
+    }
+    printf("Thread: %p, Name: %s from queue\n", threadid, hostname);
 	/*Unlock queue*/
+    sem_post(&sem_m);
+    sem_post(&sem_empty);
 
 	/* Lookup hostname and get IP string */
     if(dnslookup(hostname, firstipstr, sizeof(firstipstr))
@@ -101,9 +128,12 @@ void* Consumer(void* threadid){
     }
 
     /*Lock file*/
+    sem_wait(&sem_results);
     /* Write to Output File */
+    //printf("Thread: %d, Name: %s from queue\n", threadid, hostname);
 	fprintf(outputfp, "%s,%s\n", hostname, firstipstr);
 	/*Unlock file*/
+    sem_post(&sem_results);
 	return NULL;
 }
 
@@ -126,9 +156,9 @@ int main(int argc, char* argv[]){
     
     /* Check Arguments */
     if(argc < MINARGS){
-	fprintf(stderr, "Not enough arguments: %d\n", (argc - 1));
-	fprintf(stderr, "Usage:\n %s %s\n", argv[0], USAGE);
-	return EXIT_FAILURE;
+    	fprintf(stderr, "Not enough arguments: %d\n", (argc - 1));
+    	fprintf(stderr, "Usage:\n %s %s\n", argv[0], USAGE);
+    	return EXIT_FAILURE;
     }
 
     /*Calculate number of input files*/
@@ -147,35 +177,40 @@ int main(int argc, char* argv[]){
     /* Open Output File */
     outputfp = fopen(argv[(argc-1)], "w");
     if(!outputfp){
-	perror("Error Opening Output File");
-	return EXIT_FAILURE;
+    	perror("Error Opening Output File");
+    	return EXIT_FAILURE;
     }
 
     /*Initialize semaphores*/
-    sem_init(&sem_full, 0, 10);
-    sem_init(&sem_empty, 0, 0);
+    sem_init(&sem_full, 0, 0);
+    sem_init(&sem_empty, 0, QUEUE_SIZE);
     sem_init(&sem_m, 0, 1);
+    sem_init(&sem_results, 0, 1);
+
+    int valp;
+    sem_getvalue(&sem_empty, &valp);
+    printf("VALUE of EMPTY Semaphore main %d\n", valp);
 
     /* Loop Through Input Files and Create Producer Threads */
-    for(i=0; i<numinputfiles; i++){
-		printf("In main: creating thread %ld\n", t);
-		rc = pthread_create(&(producer_threads[i]), NULL, Producer, argv[i+1]);
+    for(t=0; t<numinputfiles; t++){
+		printf("In main: creating producer thread %ld, %s\n", t, argv[t+1]);
+		rc = pthread_create(&(producer_threads[t]), NULL, Producer, argv[t+1]);
 		if (rc){
 		    printf("ERROR; return code from pthread_create() is %d\n", rc);
 		    exit(EXIT_FAILURE);
 		}
 	}	
-
-	/* Spawn NUM_THREADS Consumer threads */
-    for(t=0;t<NUM_THREADS;t++){
-		printf("In main: creating thread %ld\n", t);
-		cpyt[t] = t;
-		rc = pthread_create(&(consumer_threads[t]), NULL, Consumer, &(cpyt[t]));
-		if (rc){
-		    printf("ERROR; return code from pthread_create() is %d\n", rc);
-		    exit(EXIT_FAILURE);
-		}
-    }
+    t = 0;
+	// /* Spawn NUM_THREADS Consumer threads */
+ //    for(t=0;t<NUM_THREADS;t++){
+	// 	printf("In main: creating consumer thread %ld\n", t);
+	// 	cpyt[t] = t;
+	// 	rc = pthread_create(&(consumer_threads[t]), NULL, Consumer, &(cpyt[t]));
+	// 	if (rc){
+	// 	    printf("ERROR; return code from pthread_create() is %d\n", rc);
+	// 	    exit(EXIT_FAILURE);
+	// 	}
+ //    }
 
 	/* Wait for All Producer Theads to Finish */
     for(t=0;t<numinputfiles;t++){
@@ -185,15 +220,18 @@ int main(int argc, char* argv[]){
 	
     /*Set doneWritingToQueue to TRUE so consumer threads know
     they can stop*/
-    doneWritingToQueue = true;
+    doneWritingToQueue = 1;
 
-    /* Wait for All Consumer Theads to Finish */
-    for(t=0;t<NUM_THREADS;t++){
-		pthread_join(consumer_threads[t],NULL);
-    }
+  //   /* Wait for All Consumer Theads to Finish */
+  //   for(t=0;t<NUM_THREADS;t++){
+		// pthread_join(consumer_threads[t],NULL);
+  //   }
     printf("All of the threads were completed!\n");
 	
-
+    sem_destroy(&sem_empty);
+    sem_destroy(&sem_full);
+    sem_destroy(&sem_m);
+    sem_destroy(&sem_results);
     /* Close Output File */
     fclose(outputfp);
 
