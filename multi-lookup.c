@@ -26,11 +26,12 @@
 #define SBUFSIZE 1025
 #define INPUTFS "%1024s"
 #define NUM_THREADS 10
-#define QUEUE_SIZE 10
+#define QUEUE_SIZE 5
 
 FILE* outputfp = NULL;
 queue q;
 int doneWritingToQueue = 0;
+int processIsDone = 0;
 sem_t sem_full;
 sem_t sem_empty;
 sem_t sem_m;
@@ -41,23 +42,12 @@ void* Producer(void* fn)
 {
     /* Setup Local Vars and Handle void* */
     char* filename = fn;
-    long t;
+    //long t;
     long numprint = 3;
     char hostname[SBUFSIZE];
     char errorstr[SBUFSIZE];
     FILE* inputfp = NULL;
     int valp;
-
-    /* Print hello numprint times */
- //    for(t=0; t<numprint; t++)
-	// {
-	//     printf("Hello World! It's me, thread %s! "
-	// 	   "This is printout %ld of %ld\n",
-	// 	   filename, (t+1), numprint);
-
-	//     /* Sleep for 1 to 2 Seconds */
-	//     usleep((rand()%100)*10000+1000000);
-	// }
 
 	/* Open Input File */
 	inputfp = fopen(filename, "r");
@@ -66,18 +56,21 @@ void* Producer(void* fn)
 	    perror(errorstr);
 	}
 
-    sem_getvalue(&sem_empty, &valp);
-    printf("VALUE of EMPTY Semaphore before while loop %d\n", valp);
+    //sem_getvalue(&sem_empty, &valp);
+    //printf("VALUE of EMPTY Semaphore before while loop %d\n", valp);
 
 	/* Read File and Process*/
 	while(fscanf(inputfp, INPUTFS, hostname) > 0){
 		/*Decrement full semaphore and acquire queue lock*/
         sem_getvalue(&sem_empty, &valp);
-        printf("VALUE of EMPTY Semaphore beginning of while loop %d\n",valp);
+        printf("Thread %s INPUTFS empty %d",filename, valp);
+        sem_getvalue(&sem_full, &valp);
+        printf(" full %d\n",valp);
+
         sem_wait(&sem_empty);
         sem_wait(&sem_m);
-        sem_getvalue(&sem_empty, &valp);
-        printf("VALUE of EMPTY Semaphore after entering lock %d\n",valp);
+        // sem_getvalue(&sem_empty, &valp);
+        // printf("VALUE of EMPTY Semaphore after entering lock %d\n",valp);
 		/*Add name to queue*/
         if(queue_push(&q, hostname) == QUEUE_FAILURE){
             fprintf(stderr,
@@ -101,39 +94,53 @@ void* Producer(void* fn)
 void* Consumer(void* threadid){
     //char hostname[SBUFSIZE];
     char* hostname;
+    long* tid = threadid;
     //char errorstr[SBUFSIZE];
     char firstipstr[INET6_ADDRSTRLEN];
+    int valp;
 
-	/*Decrement empty semaphore and acquire queue lock*/
-    sem_wait(&sem_full);
-    sem_wait(&sem_m);
+    while(!doneWritingToQueue && !processIsDone){
+        sem_getvalue(&sem_empty, &valp);
+        printf("Thread %ld is empty %d",*tid, valp);
+        sem_getvalue(&sem_full, &valp);
+        printf(" full %d\n",valp);
 
-	/*Get a name*/
-    if((hostname = queue_pop(&q)) == NULL){
-        fprintf(stderr,
-            "error: queue_pop failed!\n"
-            "Threadid: %p\n",
-            threadid);
+    	/*Decrement empty stderremaphore and acquire queue lock*/
+        sem_wait(&sem_full);
+        sem_wait(&sem_m);
+
+    	/*Get a name*/
+        if((hostname = queue_pop(&q)) == NULL){
+            fprintf(stderr,
+                "error: queue_pop failed!\n"
+                "Threadid: %p\n",
+                threadid);
+        }
+        printf("Thread: %ld, Name: %s from queue\n", *tid, hostname);
+        /*Check if the queue is empty and the producers are done
+            and set flag so.*/
+        if(queue_is_empty(&q) && doneWritingToQueue){
+            processIsDone = 1;
+        }
+    	/*Unlock queue*/
+        sem_post(&sem_m);
+        sem_post(&sem_empty);
+
+    	/* Lookup hostname and get IP string */
+        if(dnslookup(hostname, firstipstr, sizeof(firstipstr))
+          				 == UTIL_FAILURE){
+    		fprintf(stderr, "dnslookup error: %s\n", hostname);
+    		strncpy(firstipstr, "", sizeof(firstipstr));  
+        }
+
+        /*Lock file*/
+        sem_wait(&sem_results);
+        /* Write to Output File */
+        printf("Thread: %ld to file\n", *tid);
+    	fprintf(outputfp, "%s,%s\n", hostname, firstipstr);
+    	/*Unlock file*/
+        sem_post(&sem_results);
     }
-    printf("Thread: %p, Name: %s from queue\n", threadid, hostname);
-	/*Unlock queue*/
-    sem_post(&sem_m);
-    sem_post(&sem_empty);
-
-	/* Lookup hostname and get IP string */
-    if(dnslookup(hostname, firstipstr, sizeof(firstipstr))
-      				 == UTIL_FAILURE){
-		fprintf(stderr, "dnslookup error: %s\n", hostname);
-		strncpy(firstipstr, "", sizeof(firstipstr));
-    }
-
-    /*Lock file*/
-    sem_wait(&sem_results);
-    /* Write to Output File */
-    //printf("Thread: %d, Name: %s from queue\n", threadid, hostname);
-	fprintf(outputfp, "%s,%s\n", hostname, firstipstr);
-	/*Unlock file*/
-    sem_post(&sem_results);
 	return NULL;
 }
 
@@ -167,10 +174,7 @@ int main(int argc, char* argv[]){
      if(sem_init(&sem_results, 0, 1) == -1){
         fprintf(stderr, "Error creating sem_init\n");
     }
-    
-    
-    
-    
+
     /* Check Arguments */
     if(argc < MINARGS){
     	fprintf(stderr, "Not enough arguments: %d\n", (argc - 1));
@@ -214,16 +218,16 @@ int main(int argc, char* argv[]){
 		}
 	}	
     t = 0;
-	// /* Spawn NUM_THREADS Consumer threads */
- //    for(t=0;t<NUM_THREADS;t++){
-	// 	printf("In main: creating consumer thread %ld\n", t);
-	// 	cpyt[t] = t;
-	// 	rc = pthread_create(&(consumer_threads[t]), NULL, Consumer, &(cpyt[t]));
-	// 	if (rc){
-	// 	    printf("ERROR; return code from pthread_create() is %d\n", rc);
-	// 	    exit(EXIT_FAILURE);
-	// 	}
- //    }
+	 /* Spawn NUM_THREADS Consumer threads */
+     for(t=0;t<NUM_THREADS;t++){
+	 	printf("In main: creating consumer thread %ld\n", t);
+	 	cpyt[t] = t;
+	 	rc = pthread_create(&(consumer_threads[t]), NULL, Consumer, &(cpyt[t]));
+	 	if (rc){
+	 	    printf("ERROR; return code from pthread_create() is %d\n", rc);
+	 	    exit(EXIT_FAILURE);
+	 	}
+     }
 
 	/* Wait for All Producer Theads to Finish */
     for(t=0;t<numinputfiles;t++){
@@ -235,16 +239,20 @@ int main(int argc, char* argv[]){
     they can stop*/
     doneWritingToQueue = 1;
 
-  //   /* Wait for All Consumer Theads to Finish */
-  //   for(t=0;t<NUM_THREADS;t++){
-		// pthread_join(consumer_threads[t],NULL);
-  //   }
+    /* Wait for All Consumer Theads to Finish */
+     for(t=0;t<NUM_THREADS;t++){
+		 pthread_join(consumer_threads[t],NULL);
+     }
     printf("All of the threads were completed!\n");
 	
+    /*Free semaphore*/
     sem_destroy(&sem_empty);
     sem_destroy(&sem_full);
     sem_destroy(&sem_m);
     sem_destroy(&sem_results);
+
+    /*Free queue*/
+    queue_cleanup(&q);   
     /* Close Output File */
     fclose(outputfp);
 
