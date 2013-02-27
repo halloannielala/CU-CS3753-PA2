@@ -153,6 +153,23 @@ int main(int argc, char* argv[]){
     int rc;
     long t;
     long cpyt[NUM_THREADS];
+
+    /*Initialize semaphores*/
+    if(sem_init(&sem_full, 0, 0) == -1){
+        fprintf(stderr, "Error creating sem_init\n");
+    }
+     if(sem_init(&sem_empty, 0, QUEUE_SIZE) == -1){
+        fprintf(stderr, "Error creating sem_init\n");
+    }
+     if(sem_init(&sem_m, 0, 1) == -1){
+        fprintf(stderr, "Error creating sem_init\n");
+    }
+     if(sem_init(&sem_results, 0, 1) == -1){
+        fprintf(stderr, "Error creating sem_init\n");
+    }
+    
+    
+    
     
     /* Check Arguments */
     if(argc < MINARGS){
@@ -181,11 +198,7 @@ int main(int argc, char* argv[]){
     	return EXIT_FAILURE;
     }
 
-    /*Initialize semaphores*/
-    sem_init(&sem_full, 0, 0);
-    sem_init(&sem_empty, 0, QUEUE_SIZE);
-    sem_init(&sem_m, 0, 1);
-    sem_init(&sem_results, 0, 1);
+    
 
     int valp;
     sem_getvalue(&sem_empty, &valp);
