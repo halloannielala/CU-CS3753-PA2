@@ -18,9 +18,33 @@
 #include "util.h"
 
 #define MINARGS 3
-#define USAGE "<inputFilePath> <outputFilePath>"
+#define USAGE "<inputFilePath1> (other input filepaths) <outputFilePath>"
 #define SBUFSIZE 1025
 #define INPUTFS "%1024s"
+
+/* Function for Each Thread to Run */
+void* Producer(void* threadid)
+{
+    /* Setup Local Vars and Handle void* */
+    long* tid = threadid;
+    long t;
+    long numprint = 3;
+
+    /* Print hello numprint times */
+    for(t=0; t<numprint; t++)
+	{
+	    printf("Hello World! It's me, thread #%ld! "
+		   "This is printout %ld of %ld\n",
+		   *tid, (t+1), numprint);
+	    /* Sleep for 1 to 2 Seconds */
+	    usleep((rand()%100)*10000+1000000);
+	}
+    
+    /* Exit, Returning NULL*/
+    return NULL;
+}
+
+
 
 int main(int argc, char* argv[]){
 
@@ -31,6 +55,13 @@ int main(int argc, char* argv[]){
     char errorstr[SBUFSIZE];
     char firstipstr[INET6_ADDRSTRLEN];
     int i;
+    int numinputfiles;
+    
+    /* Setup Local Vars */
+    
+    int rc;
+    long t;
+    long cpyt[NUM_THREADS];
     
     /* Check Arguments */
     if(argc < MINARGS){
@@ -39,6 +70,13 @@ int main(int argc, char* argv[]){
 	return EXIT_FAILURE;
     }
 
+    /*Calculate number of input files*/
+    numinputfiles = argc - 2;
+
+    /*Initialize the array of producer threads to be the number of 
+    input files */
+    pthread_t producer_threads[numinputfiles];
+    
     /* Open Output File */
     outputfp = fopen(argv[(argc-1)], "w");
     if(!outputfp){
@@ -49,12 +87,12 @@ int main(int argc, char* argv[]){
     /* Loop Through Input Files */
     for(i=1; i<(argc-1); i++){
 	
-	/* Open Input File */
-	inputfp = fopen(argv[i], "r");
-	if(!inputfp){
-	    sprintf(errorstr, "Error Opening Input File: %s", argv[i]);
-	    perror(errorstr);
-	    break;
+		/* Open Input File */
+		inputfp = fopen(argv[i], "r");
+		if(!inputfp){
+		    sprintf(errorstr, "Error Opening Input File: %s", argv[i]);
+		    perror(errorstr);
+		    break;
 	}	
 
 	/* Read File and Process*/
