@@ -29,6 +29,9 @@ FILE* outputfp = NULL;
 #define QUEUE_SIZE 10
 queue q;
 bool doneWritingToQueue = false;
+sem_t sem_full;
+sem_t sem_empty;
+sem_t sem_m;
 
 /* Function for Each Thread to Run */
 void* Producer(void* fn)
@@ -137,6 +140,11 @@ int main(int argc, char* argv[]){
 	perror("Error Opening Output File");
 	return EXIT_FAILURE;
     }
+
+    /*Initialize semaphores*/
+    sem_init(&sem_full, 0, 10);
+    sem_init(&sem_empty, 0, 0);
+    sem_init(&sem_m, 0, 1);
 
     /* Loop Through Input Files and Create Producer Threads */
     for(i=0; i<numinputfiles; i++){
