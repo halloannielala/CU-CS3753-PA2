@@ -65,9 +65,19 @@ void* Producer(void* fn)
 
 	/* Read File and Process*/
 	while(fscanf(inputfp, INPUTFS, hostname) > 0){
-		/*Lock queue*/
+        printf("%s\n", hostname);
+		/*Decrement semaphore and lock queue*/
+        sem_wait(&sem_full);
+        sem_wait(&sem_m);
 		/*Add name to queue*/
+        if(queue_push(&q, payload_in[i]) == QUEUE_FAILURE){
+            fprintf(stderr,
+                "error: queue_push failed!\n"
+                "Thread %s, Name: %s\n",
+                filename, hostname);
 	    /*Unlock queue*/
+        sem_post(&sem_m);
+        sem_post(&sem_empty);
 	}
     
 	/* Close Input File */
