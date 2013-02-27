@@ -10,10 +10,12 @@
  *  
  */
 
+#include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <unistd.h>
 
 #include "util.h"
 
@@ -23,23 +25,52 @@
 #define INPUTFS "%1024s"
 
 /* Function for Each Thread to Run */
-void* Producer(void* threadid)
+void* Producer(void* fn)
 {
     /* Setup Local Vars and Handle void* */
-    long* tid = threadid;
+    char* filename = fn;
     long t;
     long numprint = 3;
+    char hostname[SBUFSIZE];
+    char errorstr[SBUFSIZE];
+    char firstipstr[INET6_ADDRSTRLEN];
+    FILE* inputfp = NULL;
 
     /* Print hello numprint times */
     for(t=0; t<numprint; t++)
 	{
-	    printf("Hello World! It's me, thread #%ld! "
+	    printf("Hello World! It's me, thread %s! "
 		   "This is printout %ld of %ld\n",
-		   *tid, (t+1), numprint);
+		   filename, (t+1), numprint);
+
 	    /* Sleep for 1 to 2 Seconds */
 	    usleep((rand()%100)*10000+1000000);
 	}
+
+	/* Open Input File */
+	inputfp = fopen(filename, "r");
+	if(!inputfp){
+	    sprintf(errorstr, "Error Opening Input File: %s", filename);
+	    perror(errorstr);
+	}
+
+	/* Read File and Process*/
+	while(fscanf(inputfp, INPUTFS, hostname) > 0){
+	
+	    /* Lookup hostname and get IP string */
+	    if(dnslookup(hostname, firstipstr, sizeof(firstipstr))
+	       == UTIL_FAILURE){
+		fprintf(stderr, "dnslookup error: %s\n", hostname);
+		strncpy(firstipstr, "", sizeof(firstipstr));
+	    }
+
+	     /* Write to Output File */
+	    printf("Thread %s %s,%s\n", filename, hostname, firstipstr);
+	}
     
+	/* Close Input File */
+	fclose(inputfp);
+
     /* Exit, Returning NULL*/
     return NULL;
 }
@@ -49,19 +80,17 @@ void* Producer(void* threadid)
 int main(int argc, char* argv[]){
 
     /* Local Vars */
-    FILE* inputfp = NULL;
     FILE* outputfp = NULL;
-    char hostname[SBUFSIZE];
-    char errorstr[SBUFSIZE];
-    char firstipstr[INET6_ADDRSTRLEN];
+    // char hostname[SBUFSIZE];
+    // char errorstr[SBUFSIZE];
+    // char firstipstr[INET6_ADDRSTRLEN];
     int i;
     int numinputfiles;
     
     /* Setup Local Vars */
-    
     int rc;
     long t;
-    long cpyt[NUM_THREADS];
+    //long cpyt[NUM_THREADS];
     
     /* Check Arguments */
     if(argc < MINARGS){
@@ -76,7 +105,7 @@ int main(int argc, char* argv[]){
     /*Initialize the array of producer threads to be the number of 
     input files */
     pthread_t producer_threads[numinputfiles];
-    
+
     /* Open Output File */
     outputfp = fopen(argv[(argc-1)], "w");
     if(!outputfp){
@@ -86,35 +115,24 @@ int main(int argc, char* argv[]){
 
     /* Loop Through Input Files */
     for(i=1; i<(argc-1); i++){
-	
-		/* Open Input File */
-		inputfp = fopen(argv[i], "r");
-		if(!inputfp){
-		    sprintf(errorstr, "Error Opening Input File: %s", argv[i]);
-		    perror(errorstr);
-		    break;
+		printf("In main: creating thread %ld\n", t);
+		rc = pthread_create(&(producer_threads[i]), NULL, Producer, &(argv[i]));
+		if (rc){
+		    printf("ERROR; return code from pthread_create() is %d\n", rc);
+		    exit(EXIT_FAILURE);
+		}
 	}	
 
-	/* Read File and Process*/
-	while(fscanf(inputfp, INPUTFS, hostname) > 0){
 	
-	    /* Lookup hostname and get IP string */
-	    if(dnslookup(hostname, firstipstr, sizeof(firstipstr))
-	       == UTIL_FAILURE){
-		fprintf(stderr, "dnslookup error: %s\n", hostname);
-		strncpy(firstipstr, "", sizeof(firstipstr));
-	    }
 	
-	    /* Write to Output File */
-	    fprintf(outputfp, "%s,%s\n", hostname, firstipstr);
-	}
+	//     /* Write to Output File */
+	//     fprintf(outputfp, "%s,%s\n", hostname, firstipstr);
+	// }
 
-	/* Close Input File */
-	fclose(inputfp);
-    }
+	
 
     /* Close Output File */
-    fclose(outputfp);
+    //fclose(outputfp);
 
     return EXIT_SUCCESS;
 }
