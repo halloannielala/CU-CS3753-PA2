@@ -102,13 +102,23 @@ void* Consumer(void* threadid){
     int valp;
     int val_m;
     int complete;
+    int isEmpty;
 
     while(1){
-        if(sem_getvalue(&sem_producers_done, &valp) == 0 && valp < 1 
-            && sem_getvalue(&sem_full, &val_m) == 0 && val_m < 1){
-            break;
-        }
+        // if(sem_getvalue(&sem_producers_done, &valp) == 0 && valp < 1 
+        //     && sem_getvalue(&sem_full, &val_m) == 0 && val_m < 1){
+        //     break;
+        // }
         complete = 0;
+        sem_wait(&sem_producers_done);
+        if(doneWritingToQueue) complete++;
+        sem_post(&sem_producers_done);
+        sem_wait(&sem_m);
+        isEmpty = queue_is_empty(&q);
+        if(isEmpty) complete++;
+        sem_post(&sem_m);
+      
+        if(complete == 2) return NULL;
         // sem_getvalue(&sem_empty, &valp);
         // printf("Thread %ld is empty %d",*tid, valp);
         // sem_getvalue(&sem_full, &valp);
@@ -129,21 +139,21 @@ void* Consumer(void* threadid){
         /*Check if the queue is empty and the producers are done
             and set flag so.*/
         /*Check to see if producers are done*/
-        sem_wait(&sem_producers_done);
-        if(doneWritingToQueue) complete = 1;
-        sem_post(&sem_producers_done);
+        // sem_wait(&sem_producers_done);
+        // if(doneWritingToQueue) complete = 1;
+        // sem_post(&sem_producers_done);
 
         /*Check to see if the queue is empty*/
         //sem_wait(&sem_m);
-        sem_getvalue(&sem_full, &val_m);
+        //sem_getvalue(&sem_full, &val_m);
         //printf("THE QUEUE is %d THE PRODUCERS ARE %d\n", val_m, complete);
-        if(val_m==0 && complete==1){
-            complete = 2;
+        // if(val_m==0 && complete==1){
+        //     complete = 2;
 
-            //sem_wait(&sem_process_done);
-            // processIsDone = 1;
-            // sem_post(&sem_process_done);
-        }
+        //     //sem_wait(&sem_process_done);
+        //     // processIsDone = 1;
+        //     // sem_post(&sem_process_done);
+        // }
 
     	/*Unlock queue*/
         sem_post(&sem_m);
@@ -166,7 +176,7 @@ void* Consumer(void* threadid){
 
         /*If producers are done and queue is empty, break
         out of while loop to finish this thread*/
-        if(complete == 2) break;
+        //if(complete == 2) break;
     }
 	return NULL;
 }
@@ -269,8 +279,8 @@ int main(int argc, char* argv[]){
     /*Set doneWritingToQueue to 1 so consumer threads know
     they can stop*/
     sem_wait(&sem_producers_done);
-    // doneWritingToQueue = 1;
-    // sem_post(&sem_producers_done);
+    doneWritingToQueue = 1;
+    sem_post(&sem_producers_done);
 
     /* Wait for All Consumer Theads to Finish */
      for(t=0;t<NUM_THREADS;t++){
