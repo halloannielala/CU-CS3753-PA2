@@ -1,34 +1,19 @@
 /*
- * File: lookup.c
+ * 
+File: multi-lookup.c
+Author: Anne Gatchell
+Project: CSCI 3753 Programming Assignment 2
+Create Date: 2013/02/25
+Modify Date: 2013/02/27
+
+Adapted from:
+File: lookup.c
  * Author: Andy Sayler
- * Project: CSCI 3753 Programming Assignment 2
- * Create Date: 2012/02/01
- * Modify Date: 2012/02/01
- * Description:
- * 	This file contains the reference non-threaded
- *      solution to this assignment.
- *  
+
+
+Description: This is a 
  */
-
-#include <pthread.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <errno.h>
-#include <unistd.h>
-#include <semaphore.h>
-
-#include "util.h"
-#include "queue.h"
-
-#define MINARGS 3
-#define USAGE "<inputFilePath1> (other input filepaths) <outputFilePath>"
-#define SBUFSIZE 1025
-#define INPUTFS "%1024s"
-#define NUM_THREADS 10
-#define QUEUE_SIZE 1
-#define MAX_NAME_LENGTH 1025
-#define MAX_IP_LENGTH INET6_ADDRSTRLEN
+#include "multi-lookup.h"
 
 FILE* outputfp = NULL;
 queue q;
