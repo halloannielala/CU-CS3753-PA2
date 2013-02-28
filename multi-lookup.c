@@ -166,6 +166,7 @@ void* Consumer(void* threadid){
         }else{
             if(doneWritingToQueue){
                 sem_post(&sem_full);
+                sem_post(&sem_m);
                 return NULL;
             }
         }
