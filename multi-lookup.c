@@ -116,10 +116,12 @@ void* Consumer(void* threadid){
         //     break;
         // }
         complete = 0;
-
+        int i = 0;
         if(doneWritingToQueue){
             printf("1st Thread %ld is done\n", *tid);
-            sem_post(&sem_full);
+            for(i = 0; i < QUEUE_SIZE;i++){
+                sem_post(&sem_full);    
+            }
             return NULL;
         }
         // sem_wait(&sem_producers_done);
