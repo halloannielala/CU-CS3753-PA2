@@ -117,6 +117,11 @@ void* Consumer(void* threadid){
         // }
         complete = 0;
 
+        if(doneWritingToQueue){
+            printf("1st Thread %ld is done\n", *tid);
+            sem_post(&sem_full);
+            return NULL;
+        }
         // sem_wait(&sem_producers_done);
         // if(doneWritingToQueue == 2){
         //     complete = 2;
@@ -128,14 +133,10 @@ void* Consumer(void* threadid){
         // if(queue_is_empty(&q)){
         //     complete++;
         // }
-        // //sem_post(&sem_m);
+        // // sem_post(&sem_m);
       
         // if(complete >= 2) return NULL;
-        // sem_getvalue(&sem_empty, &valp);
-        // printf("Thread %ld is empty %d",*tid, valp);
-        // sem_getvalue(&sem_full, &valp);
-        // printf(" full %d\n",valp);
-        //sem_post(&sem_m);
+        
     	/*Decrement empty stderremaphore and acquire queue lock*/
         sem_wait(&sem_full);
         sem_wait(&sem_m);
@@ -149,6 +150,7 @@ void* Consumer(void* threadid){
                     threadid);
             }
             strcpy(hostname, holder_variable);
+            // if(strcmp(hostname, ))
             printf("POP%ld: %s from queue\n", *tid, hostname);
 
 
@@ -159,6 +161,11 @@ void* Consumer(void* threadid){
                 strncpy(firstipstr, "", sizeof(firstipstr));  
             }
             free(holder_variable);
+        }else{
+            if(doneWritingToQueue){
+                sem_post(&sem_full);
+                return NULL;
+            }
         }
     	/*Unlock queue*/
         sem_post(&sem_m);
@@ -174,8 +181,12 @@ void* Consumer(void* threadid){
 
         /*If producers are done and queue is empty, break
         out of while loop to finish this thread*/
-        //if(complete == 2) break;
+        // if(doneWritingToQueue){
+        //     printf("2nd Thread %ld is done\n", *tid);
+        //     return NULL;
+        // }
     }
+    printf("LAST Thread %ld is done\n", *tid);
 	return NULL;
 }
 
@@ -279,6 +290,7 @@ int main(int argc, char* argv[]){
     sem_wait(&sem_producers_done);
     doneWritingToQueue = 1;
     sem_post(&sem_producers_done);
+
 
     /* Wait for All Consumer Theads to Finish */
      for(t=0;t<NUM_THREADS;t++){
