@@ -11,7 +11,15 @@ File: lookup.c
  * Author: Andy Sayler
 
 
-Description: This is a 
+Description: This is a multithreaded requester-resolver
+DNS Resolution Engine.
+
+Determines number of threads to use automatically.
+number_of_threads = number_available_cores/(1 - blocking_coefficient)
+Since this is an I/O intensive application, use blocking_coefficient
+of 0.9
+
+
  */
 #include "multi-lookup.h"
 
@@ -155,8 +163,11 @@ void* Consumer(void* threadid){
 
 int main(int argc, char* argv[]){
     /* Local Vars */
+    int numCPU = sysconf(_SC_NPROCESSORS_ONLN );
+    //printf("numCPU %d\n", numCPU);
+    int number_of_threads = numCPU/(1-BLOCKING_COEFFICIENT);
     int numinputfiles;
-    pthread_t consumer_threads[NUM_THREADS];
+    pthread_t consumer_threads[number_of_threads];
     int rc;
     long t;
     long cpyt[NUM_THREADS];

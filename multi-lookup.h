@@ -1,6 +1,6 @@
 /*
  * 
-File: multi-lookup.c
+File: multi-lookup.h
 Author: Anne Gatchell
 Project: CSCI 3753 Programming Assignment 2
 Create Date: 2013/02/25
@@ -11,8 +11,13 @@ File: lookup.c
  * Author: Andy Sayler
 
 
-Description: This is the header file for a producer consumer
-DNS Resolution Engine.
+Description: This is the header file for a requester-
+resolver DNS Resolution Engine.
+
+Determines number of threads to use automatically.
+number_of_threads = number_available_cores/(1 - blocking_coefficient)
+Since this is an I/O intensive application, use blocking_coefficient
+of 0.9
  */
 
 
@@ -35,9 +40,10 @@ DNS Resolution Engine.
 #define SBUFSIZE 1025
 #define INPUTFS "%1024s"
 #define NUM_THREADS 10
-#define QUEUE_SIZE 1
+#define QUEUE_SIZE 10
 #define MAX_NAME_LENGTH 1025
 #define MAX_IP_LENGTH INET6_ADDRSTRLEN
+#define BLOCKING_COEFFICIENT 0.9
 
 /* Function for Producer threads
 to run. One thread is run per input file.
@@ -61,7 +67,7 @@ all the producer threads have finished
 (a boolean variable) and the queue is 
 empty.
 In order to make sure that all threads 
-exit. The first exiting thread increments
+exit, the first exiting thread increments
 the full count semaphore many times in order
 to free any threads from a fruitless blocking
 situation. Those threads then realize the queue

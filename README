@@ -52,3 +52,32 @@ Check queue for memory leaks:
 
 Run pthread-hello
  ./pthread-hello
+
+
+Description:
+Multithreaded DNS requester-resolution engine.
+
+Determines the number of threads to use at runtime
+based on the number of cores the machine has, using the 
+equation:
+
+number_of_threads = number_available_cores/(1 - blocking_coefficient)
+
+Since this is an I/O intensive application, use blocking_coefficient
+of 0.9
+
+One requester thread is run per input file. So, each thread opens 
+the file is given in its argument, and it reads input 
+names from it and adds them to the queue as the queue has room available. 
+When the file has been read entirely, the thread 
+finishes and exits.
+
+The resolver threads are used to pop a domain name from the 
+queue, look up its IP address, and then print both to an output file.
+Threads exit when they discover that all the producer threads have 
+finished (determined by looking at a thread-safe boolean variable)
+and the queue is empty.
+In order to make sure that all threads exit, the first exiting thread
+ increments the full count semaphore many times in order to free any 
+ threads from a fruitless blocking situation. Those threads then realize 
+ the queue is empty and exit.
