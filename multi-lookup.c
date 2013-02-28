@@ -36,6 +36,7 @@ sem_t sem_full;
 sem_t sem_empty;
 sem_t sem_m;
 sem_t sem_results;
+sem_t sem_producers_done;
 
 /* Function for Each Thread to Run */
 void* Producer(void* fn)
@@ -43,7 +44,7 @@ void* Producer(void* fn)
     /* Setup Local Vars and Handle void* */
     char* filename = fn;
     //long t;
-    long numprint = 3;
+    //long numprint = 3;
     char hostname[SBUFSIZE];
     char errorstr[SBUFSIZE];
     FILE* inputfp = NULL;
@@ -99,7 +100,9 @@ void* Consumer(void* threadid){
     char firstipstr[INET6_ADDRSTRLEN];
     int valp;
 
-    while(!doneWritingToQueue && !processIsDone){
+    while(1){
+
+
         sem_getvalue(&sem_empty, &valp);
         printf("Thread %ld is empty %d",*tid, valp);
         sem_getvalue(&sem_full, &valp);
@@ -119,9 +122,7 @@ void* Consumer(void* threadid){
         printf("Thread: %ld, Name: %s from queue\n", *tid, hostname);
         /*Check if the queue is empty and the producers are done
             and set flag so.*/
-        if(queue_is_empty(&q) && doneWritingToQueue){
-            processIsDone = 1;
-        }
+        
     	/*Unlock queue*/
         sem_post(&sem_m);
         sem_post(&sem_empty);
@@ -152,7 +153,7 @@ int main(int argc, char* argv[]){
     // char hostname[SBUFSIZE];
     // char errorstr[SBUFSIZE];
     // char firstipstr[INET6_ADDRSTRLEN];
-    int i;
+    //int i;
     int numinputfiles;
     pthread_t consumer_threads[NUM_THREADS];
     
@@ -165,13 +166,16 @@ int main(int argc, char* argv[]){
     if(sem_init(&sem_full, 0, 0) == -1){
         fprintf(stderr, "Error creating sem_init\n");
     }
-     if(sem_init(&sem_empty, 0, QUEUE_SIZE) == -1){
+    if(sem_init(&sem_empty, 0, QUEUE_SIZE) == -1){
         fprintf(stderr, "Error creating sem_init\n");
     }
-     if(sem_init(&sem_m, 0, 1) == -1){
+    if(sem_init(&sem_m, 0, 1) == -1){
         fprintf(stderr, "Error creating sem_init\n");
     }
-     if(sem_init(&sem_results, 0, 1) == -1){
+    if(sem_init(&sem_results, 0, 1) == -1){
+        fprintf(stderr, "Error creating sem_init\n");
+    }
+    if(sem_init(&sem_producers_done, 0, 1) == -1){
         fprintf(stderr, "Error creating sem_init\n");
     }
 
@@ -233,23 +237,27 @@ int main(int argc, char* argv[]){
     for(t=0;t<numinputfiles;t++){
 		pthread_join(producer_threads[t],NULL);
     }
-    printf("All of the threads were completed!\n");
+    printf("All of the producer threads were completed!\n");
 	
     /*Set doneWritingToQueue to TRUE so consumer threads know
     they can stop*/
-    doneWritingToQueue = 1;
+    // sem_wait(&sem_producers_done);
+    // printf("The producers done sem is %s\n", );
+    // doneWritingToQueue = 1;
+    //sem_post(&sem_producers_done);
 
     /* Wait for All Consumer Theads to Finish */
      for(t=0;t<NUM_THREADS;t++){
 		 pthread_join(consumer_threads[t],NULL);
      }
-    printf("All of the threads were completed!\n");
+    printf("All of the comsumer threads were completed!\n");
 	
     /*Free semaphore*/
     sem_destroy(&sem_empty);
     sem_destroy(&sem_full);
     sem_destroy(&sem_m);
     sem_destroy(&sem_results);
+    sem_destroy(&sem_producers_done);
 
     /*Free queue*/
     queue_cleanup(&q);   

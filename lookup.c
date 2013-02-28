@@ -28,6 +28,7 @@ int main(int argc, char* argv[]){
     FILE* inputfp = NULL;
     FILE* outputfp = NULL;
     char hostname[SBUFSIZE];
+    //char* hostname;
     char errorstr[SBUFSIZE];
     char firstipstr[INET6_ADDRSTRLEN];
     int i;
