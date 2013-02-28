@@ -4,10 +4,11 @@ University of Colorado Boulder
 Programming Assignment 2
 Public Code
 
-Edited by Anne Gatchell for work on the assignment
+Author: Anne Gatchell
 Feb 2013
 
-Original Code by:
+{{
+Adapted from Code by:
 By Andy Sayler - 2012
 http://www.andysayler.com
 
@@ -18,12 +19,15 @@ Adopted from previous code by
  Chris Wailes <chris.wailes@gmail.com> - 2010
  Wei-Te Chen <weite.chen@colorado.edu> - 2011
  Blaise Barney - pthread-hello.c
+}}
 
 ---Folders---
 input - names*.txt input files
 handout - Assignment description and documentation
 
 ---Executables---
+multi-lookup - The DELIVERABLE for this assignment; a multipthreaded
+	DNS query-er
 lookup - A basic non-threaded DNS query-er
 queueTest - Unit test program for queue
 pthread-hello ; A simple threaded "Hello World" program
@@ -35,10 +39,15 @@ Build:
 Clean:
  make clean
 
+DELIVERABLE:
+Multithreaded Lookup DNS info for all names in input folder:
+ ./multi-lookup input/names*.txt results.txt
+
 Lookup DNS info for all names files in input folder:
  ./lookup input/names*.txt results.txt
 
 Check queue for memory leaks:
+ valgrind ./multi-lookup input/names*.txt results.txt
  valgrind ./queueTest
 
 Run pthread-hello
