@@ -104,12 +104,8 @@ void* Consumer(void* threadid){
     int complete;
 
     while(1){
-
-
-
-        
         if(sem_getvalue(&sem_producers_done, &valp) == 0 && valp < 1 
-            && sem_getvalue(&sem_process_done, &val_m) ==0 && val_m < 1){
+            && sem_getvalue(&sem_full, &val_m) == 0 && val_m < 1){
             break;
         }
         complete = 0;
@@ -143,7 +139,8 @@ void* Consumer(void* threadid){
         //printf("THE QUEUE is %d THE PRODUCERS ARE %d\n", val_m, complete);
         if(val_m==0 && complete==1){
             complete = 2;
-            sem_wait(&sem_process_done);
+
+            //sem_wait(&sem_process_done);
             // processIsDone = 1;
             // sem_post(&sem_process_done);
         }
