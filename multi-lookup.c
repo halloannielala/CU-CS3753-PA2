@@ -80,7 +80,7 @@ void* Producer(void* fn)
                 "Thread %s, Name: %s\n",
                 filename, hostname);
         }
-        printf("PUSH Thread: %s pushed %s to queue\n", filename, hostname);
+        printf("PUSH %s to queue\n", hostname);
 	    /*Unlock queue*/
         sem_post(&sem_m);
         sem_post(&sem_full);
@@ -110,15 +110,21 @@ void* Consumer(void* threadid){
         //     break;
         // }
         complete = 0;
+
         sem_wait(&sem_producers_done);
-        if(doneWritingToQueue) complete++;
+        if(doneWritingToQueue == 2){
+            complete = 2;
+        }else if (doneWritingToQueue == 1){
+            complete = 1;
+        }
         sem_post(&sem_producers_done);
-        sem_wait(&sem_m);
-        isEmpty = queue_is_empty(&q);
-        if(isEmpty) complete++;
-        sem_post(&sem_m);
+        //sem_wait(&sem_m);
+        if(queue_is_empty(&q)){
+            complete++;
+        }
+        //sem_post(&sem_m);
       
-        if(complete == 2) return NULL;
+        if(complete >= 2) return NULL;
         // sem_getvalue(&sem_empty, &valp);
         // printf("Thread %ld is empty %d",*tid, valp);
         // sem_getvalue(&sem_full, &valp);
@@ -135,41 +141,25 @@ void* Consumer(void* threadid){
                 "Threadid: %p\n",
                 threadid);
         }
-        printf("POP Thread: %ld, Name: %s from queue\n", *tid, hostname);
-        /*Check if the queue is empty and the producers are done
-            and set flag so.*/
-        /*Check to see if producers are done*/
-        // sem_wait(&sem_producers_done);
-        // if(doneWritingToQueue) complete = 1;
-        // sem_post(&sem_producers_done);
+        printf("POP%ld: %s from queue\n", *tid, hostname);
 
-        /*Check to see if the queue is empty*/
-        //sem_wait(&sem_m);
-        //sem_getvalue(&sem_full, &val_m);
-        //printf("THE QUEUE is %d THE PRODUCERS ARE %d\n", val_m, complete);
-        // if(val_m==0 && complete==1){
-        //     complete = 2;
-
-        //     //sem_wait(&sem_process_done);
-        //     // processIsDone = 1;
-        //     // sem_post(&sem_process_done);
-        // }
+        /* Lookup hostname and get IP string */
+        if(dnslookup(hostname, firstipstr, sizeof(firstipstr))
+                         == UTIL_FAILURE){
+            fprintf(stderr, "dnslookup error: %s\n", hostname);
+            strncpy(firstipstr, "", sizeof(firstipstr));  
+        }
 
     	/*Unlock queue*/
         sem_post(&sem_m);
         sem_post(&sem_empty);
 
-    	/* Lookup hostname and get IP string */
-        if(dnslookup(hostname, firstipstr, sizeof(firstipstr))
-          				 == UTIL_FAILURE){
-    		fprintf(stderr, "dnslookup error: %s\n", hostname);
-    		strncpy(firstipstr, "", sizeof(firstipstr));  
-        }
+    	
 
         /*Lock file*/
         sem_wait(&sem_results);
         /* Write to Output File */
-        printf("Thread: %ld to file\n", *tid);
+        printf("%s,%s %ld to file\n", hostname, firstipstr, *tid);
     	fprintf(outputfp, "%s,%s\n", hostname, firstipstr);
     	/*Unlock file*/
         sem_post(&sem_results);
