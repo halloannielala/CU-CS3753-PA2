@@ -27,6 +27,8 @@
 #define INPUTFS "%1024s"
 #define NUM_THREADS 10
 #define QUEUE_SIZE 1
+#define MAX_NAME_LENGTH 1025
+#define MAX_IP_LENGTH INET6_ADDRSTRLEN
 
 FILE* outputfp = NULL;
 queue q;
@@ -44,9 +46,8 @@ void* Producer(void* fn)
 {
     /* Setup Local Vars and Handle void* */
     char* filename = fn;
-    //long t;
-    //long numprint = 3;
-    char hostname[SBUFSIZE];
+    char* payload;
+    char hostname[MAX_NAME_LENGTH];
     char errorstr[SBUFSIZE];
     FILE* inputfp = NULL;
     int valp;
@@ -73,14 +74,18 @@ void* Producer(void* fn)
         sem_wait(&sem_m);
         // sem_getvalue(&sem_empty, &valp);
         // printf("VALUE of EMPTY Semaphore after entering lock %d\n",valp);
+
+        payload = malloc(MAX_NAME_LENGTH*sizeof(char));
+        strcpy(payload, hostname);
 		/*Add name to queue*/
-        if(queue_push(&q, hostname) == QUEUE_FAILURE){
+        if(queue_push(&q, payload) == QUEUE_FAILURE){
             fprintf(stderr,
                 "error: queue_push failed!\n"
                 "Thread %s, Name: %s\n",
                 filename, hostname);
         }
         printf("PUSH %s to queue\n", hostname);
+
 	    /*Unlock queue*/
         sem_post(&sem_m);
         sem_post(&sem_full);
@@ -95,10 +100,11 @@ void* Producer(void* fn)
 
 void* Consumer(void* threadid){
     //char hostname[SBUFSIZE];
-    char* hostname;
+    char hostname[MAX_NAME_LENGTH];
+    char* holder_variable = NULL;
     long* tid = threadid;
     //char errorstr[SBUFSIZE];
-    char firstipstr[INET6_ADDRSTRLEN];
+    char firstipstr[MAX_IP_LENGTH];
     int valp;
     int val_m;
     int complete;
@@ -111,20 +117,20 @@ void* Consumer(void* threadid){
         // }
         complete = 0;
 
-        sem_wait(&sem_producers_done);
-        if(doneWritingToQueue == 2){
-            complete = 2;
-        }else if (doneWritingToQueue == 1){
-            complete = 1;
-        }
-        sem_post(&sem_producers_done);
-        //sem_wait(&sem_m);
-        if(queue_is_empty(&q)){
-            complete++;
-        }
-        //sem_post(&sem_m);
+        // sem_wait(&sem_producers_done);
+        // if(doneWritingToQueue == 2){
+        //     complete = 2;
+        // }else if (doneWritingToQueue == 1){
+        //     complete = 1;
+        // }
+        // sem_post(&sem_producers_done);
+        // //sem_wait(&sem_m);
+        // if(queue_is_empty(&q)){
+        //     complete++;
+        // }
+        // //sem_post(&sem_m);
       
-        if(complete >= 2) return NULL;
+        // if(complete >= 2) return NULL;
         // sem_getvalue(&sem_empty, &valp);
         // printf("Thread %ld is empty %d",*tid, valp);
         // sem_getvalue(&sem_full, &valp);
@@ -135,26 +141,28 @@ void* Consumer(void* threadid){
         sem_wait(&sem_m);
 
     	/*Get a name*/
-        if((hostname = queue_pop(&q)) == NULL){
-            fprintf(stderr,
-                "error: queue_pop failed!\n"
-                "Threadid: %p\n",
-                threadid);
-        }
-        printf("POP%ld: %s from queue\n", *tid, hostname);
+        if(!(queue_is_empty(&q))){
+            if((holder_variable = (char*)queue_pop(&q)) == NULL){
+                fprintf(stderr,
+                    "error: queue_pop failed!\n"
+                    "Threadid: %p\n",
+                    threadid);
+            }
+            strcpy(hostname, holder_variable);
+            printf("POP%ld: %s from queue\n", *tid, hostname);
 
-        /* Lookup hostname and get IP string */
-        if(dnslookup(hostname, firstipstr, sizeof(firstipstr))
-                         == UTIL_FAILURE){
-            fprintf(stderr, "dnslookup error: %s\n", hostname);
-            strncpy(firstipstr, "", sizeof(firstipstr));  
-        }
 
+            /* Lookup hostname and get IP string */
+            if(dnslookup(hostname, firstipstr, sizeof(firstipstr))
+                             == UTIL_FAILURE){
+                fprintf(stderr, "dnslookup error: %s\n", hostname);
+                strncpy(firstipstr, "", sizeof(firstipstr));  
+            }
+            free(holder_variable);
+        }
     	/*Unlock queue*/
         sem_post(&sem_m);
         sem_post(&sem_empty);
-
-    	
 
         /*Lock file*/
         sem_wait(&sem_results);
