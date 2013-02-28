@@ -165,6 +165,7 @@ void* Consumer(void* threadid){
             free(holder_variable);
         }else{
             if(doneWritingToQueue){
+                printf("1st Thread %ld is done\n", *tid);
                 sem_post(&sem_full);
                 sem_post(&sem_m);
                 return NULL;
